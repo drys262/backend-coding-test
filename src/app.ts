@@ -219,10 +219,21 @@ export default (db: Database): Express => {
 
   /**
    * @swagger
-   * /rides:
+   * /rides?pageSize={pageSize}&pageNumber={pageNumber}:
    *   get:
    *     summary: Retrieve all rides
    *     description: Retrieve all rides
+   *     parameters:
+   *       - in: query
+   *         name: pageSize
+   *         schema:
+   *           type: integer
+   *           description: The number of items to return.
+   *       - in: query
+   *         name: pageNumber
+   *         schema:
+   *           type: integer
+   *           description: The page you are trying to retrieve (ex. 1, 2, 3)
    *     responses:
    *       200:
    *         description: List of rides
@@ -234,7 +245,23 @@ export default (db: Database): Express => {
    *                 $ref: '#/components/schemas/Ride'
    */
   app.get("/rides", (req, res) => {
-    db.all("SELECT * FROM Rides", function (err, rows) {
+    const query = req.query;
+
+    const defaultPageSize = 10;
+
+    let sqlQuery = `SELECT * FROM Rides LIMIT ${query.pageSize ? query.pageSize : defaultPageSize}`;
+
+    if (query.pageNumber) {
+      const pageNumber = query.pageNumber as string;
+      const parsePageNumber = Number.parseInt(pageNumber);
+      const pageSize = query.pageSize ? Number.parseInt(query.pageSize as string) : defaultPageSize;
+      const finalPageNumber = (parsePageNumber * pageSize) - pageSize;
+      if (parsePageNumber !== 1) {
+        sqlQuery += ` OFFSET ${finalPageNumber}`;
+      }
+    }
+
+    db.all(sqlQuery, function (err, rows) {
       if (err) {
         return res.send({
           error_code: "SERVER_ERROR",

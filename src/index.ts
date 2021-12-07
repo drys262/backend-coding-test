@@ -16,7 +16,7 @@ db.serialize(async () => {
   const app = createApp(db);
 
   const options = {
-    apis: ["./app.ts"],
+    apis: ["**/*.ts"],
     definition: {
       info: {
         title: "API Docs",

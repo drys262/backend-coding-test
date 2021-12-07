@@ -1,8 +1,6 @@
 {
   "colors": true,
   "exit": true,
-  "recursive": true,
-  "bail": true,
   "timeout": "1m",
   "require": ["ts-node/register/transpile-only"],
   "spec": "tests/*.test.ts"
