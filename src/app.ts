@@ -1,12 +1,11 @@
-"use strict";
+import bodyParser from 'body-parser';
+import express, { Express } from 'express';
+import { Database } from 'sqlite3';
 
-const express = require("express");
 const app = express();
-
-const bodyParser = require("body-parser");
 const jsonParser = bodyParser.json();
 
-module.exports = (db) => {
+export default (db: Database): Express => {
   /**
    * @swagger
    * components:
@@ -179,7 +178,7 @@ module.exports = (db) => {
       });
     }
 
-    var values = [
+    const values = [
       req.body.start_lat,
       req.body.start_long,
       req.body.end_lat,

@@ -1,8 +1,6 @@
-'use strict'
+import isWindows from 'is-windows';
 
-const isWindows = require('is-windows')()
-
-module.exports = {
+export default {
   branches: 80,
   'check-coverage': !isWindows,
   exclude: [
