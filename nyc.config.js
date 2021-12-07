@@ -3,11 +3,11 @@
 const isWindows = require('is-windows')()
 
 module.exports = {
+  branches: 80,
+  'check-coverage': !isWindows,
   exclude: [
     'coverage',
   ],
-  'check-coverage': !isWindows,
-  branches: 80,
   functions: 80,
   lines: 80,
   statements: 80
