@@ -16,7 +16,6 @@ module.exports = async (db) => {
       db.run(createRideTableSchema);
       resolve(db);
     } catch (error) {
-      console.log("error here", error);
       logger.error(error);
       reject(error)
     }

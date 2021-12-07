@@ -8,6 +8,8 @@
   },
   "scripts": {
     "test": "mocha tests",
+    "lint": "eslint . --ext .js",
+    "lint:fix": "npm run lint -- --fix",
     "start": "node index.js",
     "coverage": "nyc npm run test"
   },

@@ -189,7 +189,7 @@ module.exports = (db) => {
       req.body.driver_vehicle,
     ];
 
-    const result = db.run(
+    db.run(
       "INSERT INTO Rides(startLat, startLong, endLat, endLong, riderName, driverName, driverVehicle) VALUES (?, ?, ?, ?, ?, ?, ?)",
       values,
       function (err) {

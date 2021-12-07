@@ -1,11 +1,6 @@
 "use strict";
 
-const express = require("express");
-const app = express();
 const port = 8010;
-
-const bodyParser = require("body-parser");
-const jsonParser = bodyParser.json();
 
 const sqlite3 = require("sqlite3").verbose();
 const db = new sqlite3.Database(":memory:");
@@ -23,14 +18,14 @@ db.serialize(async () => {
   const app = require("./src/app")(db);
 
   const options = {
+    apis: ["./src/app.js"],
     definition: {
-      openapi: "3.0.0",
       info: {
         title: "API Docs",
         version: "1.0.0",
       },
-    },
-    apis: ["./src/app.js"], // files containing annotations as above
+      openapi: "3.0.0",
+    }, // files containing annotations as above
   };
   const openapiSpecification = swaggerJsdoc(options);
 
