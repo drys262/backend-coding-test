@@ -1,24 +1,22 @@
-"use strict";
-
 const port = 8010;
 
-const sqlite3 = require("sqlite3").verbose();
+import sqlite3 from 'sqlite3';
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
+
 const db = new sqlite3.Database(":memory:");
-
-const buildSchemas = require("./src/schemas");
-
-const swaggerUi = require("swagger-ui-express");
-const swaggerJsdoc = require("swagger-jsdoc");
-const logger = require('./src/library/logger');
-// const swaggerDocument = require("./swagger.json");
+import createApp from './app';
+import logger from "./library/logger";
+import buildSchemas from "./schemas";
 
 db.serialize(async () => {
   await buildSchemas(db);
 
-  const app = require("./src/app")(db);
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const app = createApp(db);
 
   const options = {
-    apis: ["./src/app.js"],
+    apis: ["./app.ts"],
     definition: {
       info: {
         title: "API Docs",

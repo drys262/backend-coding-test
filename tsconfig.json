@@ -1,0 +1,16 @@
+{
+  "include": [
+    "./src/**/*"
+  ],
+  "compilerOptions": {
+    /* Basic Options */
+    "target": "ES2018",
+    "module": "commonjs",
+    "declaration": true,
+    "outDir": "build",
+    "rootDir": "src",
+    "incremental": false,
+    "strict": true,
+    "esModuleInterop": true,
+  }
+}
