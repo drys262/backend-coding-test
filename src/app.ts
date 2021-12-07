@@ -1,33 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import bodyParser from "body-parser";
 import express, { Express } from "express";
+import { body, param, query, validationResult } from "express-validator";
 import { Database } from "sqlite3";
 
+import executeSqlQuery from "./library/executeSqlQuery";
+
 const app = express();
-const jsonParser = bodyParser.json();
+
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 
 export default (db: Database): Express => {
-  const executeQuery = async function (
-    query: string,
-    values?: unknown
-  ): Promise<any> {
-    return new Promise(function (resolve, reject) {
-      if (values) {
-        db.run(query, values, function (err) {
-          if (err) {
-            return reject(err);
-          }
-          resolve(this.lastID);
-        });
-      }
-      db.all(query, function (err, rows) {
-        if (err) {
-          return reject(err);
-        }
-        resolve(rows);
-      });
-    });
-  };
   /**
    * @swagger
    * components:
@@ -144,80 +128,72 @@ export default (db: Database): Express => {
    *               items:
    *                 $ref: '#/components/schemas/Ride'
    */
-  app.post("/rides", jsonParser, async (req, res) => {
-    const startLatitude = Number(req.body.start_lat);
-    const startLongitude = Number(req.body.start_long);
-    const endLatitude = Number(req.body.end_lat);
-    const endLongitude = Number(req.body.end_long);
-    const riderName = req.body.rider_name;
-    const driverName = req.body.driver_name;
-    const driverVehicle = req.body.driver_vehicle;
-    const errorMessages = [];
+  app.post(
+    "/rides",
+    body("start_lat")
+      .isFloat({ max: 90, min: -90 })
+      .withMessage(
+        "Start latitude must be between -90 - 90 degrees respectively"
+      ),
+    body("start_long")
+      .isFloat({ max: 180, min: -180 })
+      .withMessage(
+        "Start longitude must be between -180 to 180 degrees respectively"
+      ),
+    body("end_lat")
+      .isFloat({ max: 90, min: -90 })
+      .withMessage(
+        "End latitude must be between -90 - 90 degrees respectively"
+      ),
+    body("end_long")
+      .isFloat({ max: 180, min: -180 })
+      .withMessage(
+        "End longitude must be between -180 to 180 degrees respectively"
+      ),
+    body("rider_name")
+      .notEmpty()
+      .withMessage("Rider name must be a non empty string"),
+    body("driver_name")
+      .notEmpty()
+      .withMessage("Driver name must be a non empty string"),
+    body("driver_vehicle")
+      .notEmpty()
+      .withMessage("Driver vehicle must be a non empty string"),
+    async (req, res) => {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res
+          .status(400)
+          .json({ errors: errors.array(), status: "FAILED" });
+      }
 
-    if (
-      startLatitude < -90 ||
-      startLatitude > 90 ||
-      startLongitude < -180 ||
-      startLongitude > 180
-    ) {
-      errorMessages.push("Start latitude and longitude must be between -90 - 90 and -180 to 180 degrees respectively");
+      const values = [
+        req.body.start_lat,
+        req.body.start_long,
+        req.body.end_lat,
+        req.body.end_long,
+        req.body.rider_name,
+        req.body.driver_name,
+        req.body.driver_vehicle,
+      ];
+
+      const sqlQuery =
+        "INSERT INTO Rides(startLat, startLong, endLat, endLong, riderName, driverName, driverVehicle) VALUES (?, ?, ?, ?, ?, ?, ?)";
+
+      try {
+        const lastId = await executeSqlQuery(db, sqlQuery, "insert", values);
+        const secondQuery = `SELECT * FROM Rides WHERE rideID = ?`;
+        const results = await executeSqlQuery(db, secondQuery, "query", [lastId]);
+
+        res.send(results);
+      } catch (error) {
+        return res.send({
+          error_code: "SERVER_ERROR",
+          message: "Unknown error",
+        });
+      }
     }
-
-    if (
-      endLatitude < -90 ||
-      endLatitude > 90 ||
-      endLongitude < -180 ||
-      endLongitude > 180
-    ) {
-      errorMessages.push("End latitude and longitude must be between -90 - 90 and -180 to 180 degrees respectively");
-    }
-
-    if (typeof riderName !== "string" || riderName.length < 1) {
-      errorMessages.push("Rider name must be a non empty string");
-    }
-
-    if (typeof driverName !== "string" || driverName.length < 1) {
-      errorMessages.push("Driver name must be a non empty string");
-    }
-
-    if (typeof driverVehicle !== "string" || driverVehicle.length < 1) {
-      errorMessages.push("Driver vehicle must be a non empty string");
-    }
-
-    if (errorMessages.length > 0) {
-      return res.send({
-        error_code: "VALIDATION_ERROR",
-        message: errorMessages.join(',')
-      });
-    }
-
-    const values = [
-      req.body.start_lat,
-      req.body.start_long,
-      req.body.end_lat,
-      req.body.end_long,
-      req.body.rider_name,
-      req.body.driver_name,
-      req.body.driver_vehicle,
-    ];
-
-    const sqlQuery =
-      "INSERT INTO Rides(startLat, startLong, endLat, endLong, riderName, driverName, driverVehicle) VALUES (?, ?, ?, ?, ?, ?, ?)";
-
-    try {
-      const lastId = await executeQuery(sqlQuery, values);
-      const secondQuery = `SELECT * FROM Rides WHERE rideID = ${lastId}`;
-      const results = await executeQuery(secondQuery);
-
-      res.send(results);
-    } catch (error) {
-      return res.send({
-        error_code: "SERVER_ERROR",
-        message: "Unknown error",
-      });
-    }
-
-  });
+  );
 
   /**
    * @swagger
@@ -246,45 +222,63 @@ export default (db: Database): Express => {
    *               items:
    *                 $ref: '#/components/schemas/Ride'
    */
-  app.get("/rides", async (req, res) => {
-    const query = req.query;
-
-    const defaultPageSize = 10;
-
-    let sqlQuery = `SELECT * FROM Rides LIMIT ${
-      query.pageSize ? query.pageSize : defaultPageSize
-    }`;
-
-    if (query.pageNumber) {
-      const pageNumber = query.pageNumber as string;
-      const parsePageNumber = Number.parseInt(pageNumber);
-      const pageSize = query.pageSize
-        ? Number.parseInt(query.pageSize as string)
-        : defaultPageSize;
-      const finalPageNumber = parsePageNumber * pageSize - pageSize;
-      if (parsePageNumber !== 1) {
-        sqlQuery += ` OFFSET ${finalPageNumber}`;
+  app.get(
+    "/rides",
+    query("pageNumber").optional().isInt().withMessage("Page number should be an integer"),
+    query("pageSize").optional().isInt().withMessage("Page size should be an integer"),
+    async (req, res) => {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res
+          .status(400)
+          .json({ errors: errors.array(), status: "FAILED" });
       }
-    }
 
-    try {
-      const results = await executeQuery(sqlQuery);
+      const query = req.query;
 
-      if (results && results.length === 0) {
+      if (!query) return
+
+      const defaultPageSize = 10;
+
+      const values = [
+        query.pageSize
+          ? Number.parseInt(query.pageSize as string)
+          : defaultPageSize,
+      ];
+      let sqlQuery = `SELECT * FROM Rides LIMIT ?`;
+
+      if (query.pageNumber) {
+        const pageNumber = query.pageNumber as string;
+        const parsePageNumber = Number.parseInt(pageNumber);
+        const pageSize = query.pageSize
+          ? Number.parseInt(query.pageSize as string)
+          : defaultPageSize;
+        const finalPageNumber = parsePageNumber * pageSize - pageSize;
+        if (parsePageNumber !== 1) {
+          sqlQuery += " OFFSET ?";
+          values.push(finalPageNumber);
+        }
+      }
+
+      try {
+        const results = await executeSqlQuery(db, sqlQuery, "query", values);
+
+        if (results && results.length === 0) {
+          return res.send({
+            error_code: "RIDES_NOT_FOUND_ERROR",
+            message: "Could not find any rides",
+          });
+        }
+
+        res.send(results);
+      } catch (error) {
         return res.send({
-          error_code: "RIDES_NOT_FOUND_ERROR",
-          message: "Could not find any rides",
+          error_code: "SERVER_ERROR",
+          message: "Unknown error",
         });
       }
-
-      res.send(results);
-    } catch (error) {
-      return res.send({
-        error_code: "SERVER_ERROR",
-        message: "Unknown error",
-      });
     }
-  });
+  );
 
   /**
    * @swagger
@@ -309,27 +303,40 @@ export default (db: Database): Express => {
    *               items:
    *                 $ref: '#/components/schemas/Ride'
    */
-  app.get("/rides/:id", async (req, res) => {
-    const sqlQuery = `SELECT * FROM Rides WHERE rideID='${req.params.id}'`;
-
-    try {
-      const results = await executeQuery(sqlQuery);
-
-      if (results && results.length === 0) {
-        return res.send({
-          error_code: "RIDES_NOT_FOUND_ERROR",
-          message: "Could not find any rides",
-        });
+  app.get(
+    "/rides/:id",
+    param("id").isInt().notEmpty().withMessage("ID is required."),
+    async (req, res) => {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res
+          .status(400)
+          .json({ errors: errors.array(), status: "FAILED" });
       }
 
-      res.send(results);
-    } catch (error) {
-      return res.send({
-        error_code: "SERVER_ERROR",
-        message: "Unknown error",
-      });
+      const sqlQuery = `SELECT * FROM Rides WHERE rideID = ?`;
+
+      const id = req.params && req.params.id;
+
+      try {
+        const results = await executeSqlQuery(db, sqlQuery, "query", [id]);
+
+        if (results && results.length === 0) {
+          return res.send({
+            error_code: "RIDES_NOT_FOUND_ERROR",
+            message: "Could not find any rides",
+          });
+        }
+
+        res.send(results);
+      } catch (error) {
+        return res.send({
+          error_code: "SERVER_ERROR",
+          message: "Unknown error",
+        });
+      }
     }
-  });
+  );
 
   return app;
 };
