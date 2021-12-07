@@ -1,0 +1,48 @@
+config:
+  target: "http://localhost:8010"
+  phases:
+    - duration: 30
+      arrivalCount: 100
+
+  plugins:
+    expect: {}
+
+  ensure:
+    p99: 50
+
+scenarios:
+  - name: 'Test GET /rides/:id endpoint'
+    flow:
+      - get:
+          url: "/rides/1"
+          headers:
+            Content-Type: "application/json"
+          expect:
+            - statusCode: 200
+  - name: 'Test GET /rides endpoint'
+    flow:
+      - get:
+          url: "/rides"
+          headers:
+            Content-Type: "application/json"
+          expect:
+            - statusCode: 200
+  - name: 'Test POST /rides endpoint'
+    flow:
+      - post:
+          url: "/rides"
+          headers:
+            Content-Type: "application/json"
+          json:
+            start_lat: 80.08
+            start_long: 100.08
+            end_lat: 80.08
+            end_long: 100.08
+            rider_name: 'Dylan'
+            driver_name: 'DK'
+            driver_vehicle: 'Vehicle'
+          capture:
+            - json: "$.rideID"
+              as: "lastRideID"
+          expect:
+            - statusCode: 200
