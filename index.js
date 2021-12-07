@@ -14,10 +14,11 @@ const buildSchemas = require("./src/schemas");
 
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
+const logger = require('./src/library/logger');
 // const swaggerDocument = require("./swagger.json");
 
-db.serialize(() => {
-  buildSchemas(db);
+db.serialize(async () => {
+  await buildSchemas(db);
 
   const app = require("./src/app")(db);
 
@@ -35,6 +36,6 @@ db.serialize(() => {
 
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpecification));
   app.listen(port, () =>
-    console.log(`App started and listening on port ${port}`)
+    logger.info(`App started and listening on port ${port}`)
   );
 });
