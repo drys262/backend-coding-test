@@ -1,11 +1,33 @@
-import bodyParser from 'body-parser';
-import express, { Express } from 'express';
-import { Database } from 'sqlite3';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import bodyParser from "body-parser";
+import express, { Express } from "express";
+import { Database } from "sqlite3";
 
 const app = express();
 const jsonParser = bodyParser.json();
 
 export default (db: Database): Express => {
+  const executeQuery = async function (
+    query: string,
+    values?: unknown
+  ): Promise<any> {
+    return new Promise(function (resolve, reject) {
+      if (values) {
+        db.run(query, values, function (err) {
+          if (err) {
+            return reject(err);
+          }
+          resolve(this.lastID);
+        });
+      }
+      db.all(query, function (err, rows) {
+        if (err) {
+          return reject(err);
+        }
+        resolve(rows);
+      });
+    });
+  };
   /**
    * @swagger
    * components:
@@ -122,7 +144,7 @@ export default (db: Database): Express => {
    *               items:
    *                 $ref: '#/components/schemas/Ride'
    */
-  app.post("/rides", jsonParser, (req, res) => {
+  app.post("/rides", jsonParser, async (req, res) => {
     const startLatitude = Number(req.body.start_lat);
     const startLongitude = Number(req.body.start_long);
     const endLatitude = Number(req.body.end_lat);
@@ -130,6 +152,7 @@ export default (db: Database): Express => {
     const riderName = req.body.rider_name;
     const driverName = req.body.driver_name;
     const driverVehicle = req.body.driver_vehicle;
+    const errorMessages = [];
 
     if (
       startLatitude < -90 ||
@@ -137,11 +160,7 @@ export default (db: Database): Express => {
       startLongitude < -180 ||
       startLongitude > 180
     ) {
-      return res.send({
-        error_code: "VALIDATION_ERROR",
-        message:
-          "Start latitude and longitude must be between -90 - 90 and -180 to 180 degrees respectively",
-      });
+      errorMessages.push("Start latitude and longitude must be between -90 - 90 and -180 to 180 degrees respectively");
     }
 
     if (
@@ -150,31 +169,25 @@ export default (db: Database): Express => {
       endLongitude < -180 ||
       endLongitude > 180
     ) {
-      return res.send({
-        error_code: "VALIDATION_ERROR",
-        message:
-          "End latitude and longitude must be between -90 - 90 and -180 to 180 degrees respectively",
-      });
+      errorMessages.push("End latitude and longitude must be between -90 - 90 and -180 to 180 degrees respectively");
     }
 
     if (typeof riderName !== "string" || riderName.length < 1) {
-      return res.send({
-        error_code: "VALIDATION_ERROR",
-        message: "Rider name must be a non empty string",
-      });
+      errorMessages.push("Rider name must be a non empty string");
     }
 
     if (typeof driverName !== "string" || driverName.length < 1) {
-      return res.send({
-        error_code: "VALIDATION_ERROR",
-        message: "Driver name must be a non empty string",
-      });
+      errorMessages.push("Driver name must be a non empty string");
     }
 
     if (typeof driverVehicle !== "string" || driverVehicle.length < 1) {
+      errorMessages.push("Driver vehicle must be a non empty string");
+    }
+
+    if (errorMessages.length > 0) {
       return res.send({
         error_code: "VALIDATION_ERROR",
-        message: "Driver vehicle must be a non empty string",
+        message: errorMessages.join(',')
       });
     }
 
@@ -188,33 +201,22 @@ export default (db: Database): Express => {
       req.body.driver_vehicle,
     ];
 
-    db.run(
-      "INSERT INTO Rides(startLat, startLong, endLat, endLong, riderName, driverName, driverVehicle) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      values,
-      function (err) {
-        if (err) {
-          return res.send({
-            error_code: "SERVER_ERROR",
-            message: "Unknown error",
-          });
-        }
+    const sqlQuery =
+      "INSERT INTO Rides(startLat, startLong, endLat, endLong, riderName, driverName, driverVehicle) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-        db.all(
-          "SELECT * FROM Rides WHERE rideID = ?",
-          this.lastID,
-          function (err, rows) {
-            if (err) {
-              return res.send({
-                error_code: "SERVER_ERROR",
-                message: "Unknown error",
-              });
-            }
+    try {
+      const lastId = await executeQuery(sqlQuery, values);
+      const secondQuery = `SELECT * FROM Rides WHERE rideID = ${lastId}`;
+      const results = await executeQuery(secondQuery);
 
-            res.send(rows);
-          }
-        );
-      }
-    );
+      res.send(results);
+    } catch (error) {
+      return res.send({
+        error_code: "SERVER_ERROR",
+        message: "Unknown error",
+      });
+    }
+
   });
 
   /**
@@ -244,40 +246,44 @@ export default (db: Database): Express => {
    *               items:
    *                 $ref: '#/components/schemas/Ride'
    */
-  app.get("/rides", (req, res) => {
+  app.get("/rides", async (req, res) => {
     const query = req.query;
 
     const defaultPageSize = 10;
 
-    let sqlQuery = `SELECT * FROM Rides LIMIT ${query.pageSize ? query.pageSize : defaultPageSize}`;
+    let sqlQuery = `SELECT * FROM Rides LIMIT ${
+      query.pageSize ? query.pageSize : defaultPageSize
+    }`;
 
     if (query.pageNumber) {
       const pageNumber = query.pageNumber as string;
       const parsePageNumber = Number.parseInt(pageNumber);
-      const pageSize = query.pageSize ? Number.parseInt(query.pageSize as string) : defaultPageSize;
-      const finalPageNumber = (parsePageNumber * pageSize) - pageSize;
+      const pageSize = query.pageSize
+        ? Number.parseInt(query.pageSize as string)
+        : defaultPageSize;
+      const finalPageNumber = parsePageNumber * pageSize - pageSize;
       if (parsePageNumber !== 1) {
         sqlQuery += ` OFFSET ${finalPageNumber}`;
       }
     }
 
-    db.all(sqlQuery, function (err, rows) {
-      if (err) {
-        return res.send({
-          error_code: "SERVER_ERROR",
-          message: "Unknown error",
-        });
-      }
+    try {
+      const results = await executeQuery(sqlQuery);
 
-      if (rows.length === 0) {
+      if (results && results.length === 0) {
         return res.send({
           error_code: "RIDES_NOT_FOUND_ERROR",
           message: "Could not find any rides",
         });
       }
 
-      res.send(rows);
-    });
+      res.send(results);
+    } catch (error) {
+      return res.send({
+        error_code: "SERVER_ERROR",
+        message: "Unknown error",
+      });
+    }
   });
 
   /**
@@ -303,27 +309,26 @@ export default (db: Database): Express => {
    *               items:
    *                 $ref: '#/components/schemas/Ride'
    */
-  app.get("/rides/:id", (req, res) => {
-    db.all(
-      `SELECT * FROM Rides WHERE rideID='${req.params.id}'`,
-      function (err, rows) {
-        if (err) {
-          return res.send({
-            error_code: "SERVER_ERROR",
-            message: "Unknown error",
-          });
-        }
+  app.get("/rides/:id", async (req, res) => {
+    const sqlQuery = `SELECT * FROM Rides WHERE rideID='${req.params.id}'`;
 
-        if (rows.length === 0) {
-          return res.send({
-            error_code: "RIDES_NOT_FOUND_ERROR",
-            message: "Could not find any rides",
-          });
-        }
+    try {
+      const results = await executeQuery(sqlQuery);
 
-        res.send(rows);
+      if (results && results.length === 0) {
+        return res.send({
+          error_code: "RIDES_NOT_FOUND_ERROR",
+          message: "Could not find any rides",
+        });
       }
-    );
+
+      res.send(results);
+    } catch (error) {
+      return res.send({
+        error_code: "SERVER_ERROR",
+        message: "Unknown error",
+      });
+    }
   });
 
   return app;
