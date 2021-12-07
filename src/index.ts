@@ -12,7 +12,6 @@ import buildSchemas from "./schemas";
 db.serialize(async () => {
   await buildSchemas(db);
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const app = createApp(db);
 
   const options = {
@@ -26,6 +25,7 @@ db.serialize(async () => {
     }, // files containing annotations as above
   };
   const openapiSpecification = swaggerJsdoc(options);
+
 
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpecification));
   app.listen(port, () =>
